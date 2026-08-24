@@ -47,6 +47,7 @@ Weekly plastic waste: 885 grams
 Annual plastic waste: 46.02 kg (46020 grams)
 
 That's roughly equivalent to:
+
 🧴 3835 single-use water bottles worth of plastic
 
 ⚖️ 65.7% of an average adult's body weight in plastic
