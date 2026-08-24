@@ -6,6 +6,8 @@ Interactive web app estimating yearly plastic waste footprint based on consumpti
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import json
+import os
 
 st.set_page_config(page_title="Plastic Waste Estimator", page_icon="🌊", layout="centered")
 
@@ -18,18 +20,44 @@ FACTORS = {
     "food_delivery": 45,
     "packaged_snacks": 5,
     "takeaway_cups": 10,
-    "clothing_items": 150,       # grams of microplastic-shedding synthetic textiles per item/year equivalent, simplified to per-week proxy
-    "electronics_packaging": 80,  # grams per package (avg small electronics box + wrap)
-    "personal_care_items": 25,    # grams per empty container (shampoo, toothpaste tube, etc.)
+    "clothing_items": 150,
+    "electronics_packaging": 80,
+    "personal_care_items": 25,
 }
 
-# Regional benchmark averages (kg/year, illustrative estimates)
 BENCHMARKS = {
     "Global Average": 11.0,
     "India Average": 8.0,
+    "Ahmedabad (est.)": 7.5,
+    "Delhi (est.)": 9.5,
+    "Mumbai (est.)": 10.0,
     "US Average": 22.0,
     "EU Average": 14.5,
 }
+
+HISTORY_FILE = "plastic_footprint_history.json"
+
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return []
+    return []
+
+
+def save_history(history):
+    try:
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(history, f)
+    except IOError:
+        st.warning("Could not save history to disk — it will only persist for this session.")
+
+
+if "history" not in st.session_state:
+    st.session_state.history = load_history()
 
 st.markdown("### Your Weekly Habits")
 
@@ -98,29 +126,39 @@ benchmark_df = pd.DataFrame({
 st.bar_chart(benchmark_df.set_index("Category"))
 
 closest_benchmark = min(BENCHMARKS.items(), key=lambda x: abs(x[1] - annual_kg))
-st.write(f"Your footprint is closest to the **{closest_benchmark[0]}** ({closest_benchmark[1]} kg/year).")
+st.write(f"Your footprint is closest to **{closest_benchmark[0]}** ({closest_benchmark[1]} kg/year).")
 
 # ---------------------------
-# Track footprint over time (session-based)
+# Track footprint over time (persisted to disk)
 # ---------------------------
 st.markdown("---")
 st.markdown("### 📈 Track Your Progress")
-
-if "history" not in st.session_state:
-    st.session_state.history = []
 
 if st.button("💾 Save this estimate to my history"):
     st.session_state.history.append({
         "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "annual_kg": round(annual_kg, 2),
     })
-    st.success("Saved! Scroll down to see your history.")
+    save_history(st.session_state.history)
+    st.success("Saved! Your history now persists across sessions.")
 
 if st.session_state.history:
     history_df = pd.DataFrame(st.session_state.history)
     st.line_chart(history_df.set_index("date"))
     st.dataframe(history_df, use_container_width=True)
-    st.caption("Note: history is saved for this browser session only and resets when you close the tab.")
+
+    csv_data = history_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="⬇️ Download history as CSV",
+        data=csv_data,
+        file_name="plastic_footprint_history.csv",
+        mime="text/csv",
+    )
+
+    if st.button("🗑️ Clear my history"):
+        st.session_state.history = []
+        save_history([])
+        st.rerun()
 else:
     st.caption("No saved estimates yet — click the button above to start tracking your progress over time.")
 
